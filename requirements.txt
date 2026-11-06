@@ -5,9 +5,14 @@ psycopg[binary]==3.3.8
 pydantic==2.14.3
 pydantic-settings==2.16.2
 python-dotenv==1.2.4
+python-multipart==0.0.33
+scalar-fastapi==1.9.1
+PyJWT==2.15.1
 passlib[bcrypt]==1.7.4
 # passlib 1.7.4 is unmaintained and crashes on bcrypt 5.x; keep this pin.
 bcrypt==4.0.1
 pytest==9.2.0
+# Starlette's TestClient needs httpx.
+httpx==0.28.1
 # Windows has no system time zone database, so ZoneInfo needs this package.
 tzdata==2026.6

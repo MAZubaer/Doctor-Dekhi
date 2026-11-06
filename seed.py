@@ -3,9 +3,12 @@
 WARNING: this drops every table in the target database, then recreates them.
 Re-running is safe only because all existing data is thrown away.
 
-The target is DEV_DATABASE_URL with --dev or APP_ENV=dev, otherwise DATABASE_URL.
+A target must always be chosen on the command line:
 
-Run with: python seed.py --dev
+    python seed.py --dev          DEV_DATABASE_URL
+    python seed.py --prod --yes   DATABASE_URL (the main database)
+
+With neither, it prints usage and exits without connecting.
 """
 
 import argparse
@@ -14,16 +17,23 @@ import os
 
 if __name__ == "__main__":
     # Must run before the app imports below, which build the engine from APP_ENV.
-    # argparse rejects a mistyped flag rather than seeding the main database.
+    # The flag always wins, so APP_ENV alone can never choose what gets dropped.
     parser = argparse.ArgumentParser(description="Reset the database and insert demo data.")
-    parser.add_argument("--dev", action="store_true", help="use the dev branch (same as APP_ENV=dev)")
-    if parser.parse_args().dev:
-        os.environ["APP_ENV"] = "dev"
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("--dev", action="store_true", help="use DEV_DATABASE_URL")
+    target.add_argument("--prod", action="store_true", help="use DATABASE_URL (requires --yes)")
+    parser.add_argument("--yes", action="store_true", help="confirm dropping the main database")
+    args = parser.parse_args()
+    if not args.dev and not args.prod:
+        parser.error("choose a target: --dev, or --prod --yes")
+    if args.prod and not args.yes:
+        parser.error("--prod drops every table in the main database; add --yes to confirm")
+    os.environ["APP_ENV"] = "dev" if args.dev else "prod"
 
-from passlib.context import CryptContext  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.config import settings  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.core.time import today_bd  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models import (  # noqa: E402
@@ -42,8 +52,8 @@ from app.models import (  # noqa: E402
 # Demo-only login shared by all seeded staff. Printed at the end of the run.
 DEMO_PASSWORD = "Demo@1234"
 
-SCHEDULE_START = dt.time(9, 0)
-SCHEDULE_END = dt.time(13, 0)
+MORNING_SESSION = (dt.time(9, 0), dt.time(13, 0))
+EVENING_SESSION = (dt.time(16, 0), dt.time(23, 30))
 SCHEDULE_MAX_SERIALS = 30
 
 SUPER_ADMIN = ("Tanvir Ahmed", "01700000001")
@@ -106,17 +116,14 @@ SAMPLE_QUEUE = [
 ]
 CURRENT_SERIAL = 4
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def reset_tables() -> None:
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
 
-def build_hospital(data: dict) -> Hospital:
+def build_hospital(data: dict, today: dt.date) -> Hospital:
     """Build a hospital with its departments, doctors and schedules."""
-    today = today_bd()
     schedule_dates = [today, today + dt.timedelta(days=1)]
 
     departments = [
@@ -129,11 +136,12 @@ def build_hospital(data: dict) -> Hospital:
                     schedules=[
                         DoctorSchedule(
                             date=schedule_date,
-                            start_time=SCHEDULE_START,
-                            end_time=SCHEDULE_END,
+                            start_time=start_time,
+                            end_time=end_time,
                             max_serials=SCHEDULE_MAX_SERIALS,
                         )
                         for schedule_date in schedule_dates
+                        for start_time, end_time in (MORNING_SESSION, EVENING_SESSION)
                     ],
                 )
                 for doctor_name, specialty in doctors
@@ -183,7 +191,8 @@ def seed_queue(db: Session, schedule: DoctorSchedule, staff: User) -> None:
 
 def seed(db: Session) -> list[tuple[str, str, str]]:
     """Insert all demo data and return (role, hospital, phone) login rows."""
-    hashed_password = pwd_context.hash(DEMO_PASSWORD)
+    today = today_bd()
+    hashed_password = hash_password(DEMO_PASSWORD)
 
     name, phone = SUPER_ADMIN
     db.add(build_user(name, phone, UserRole.SUPER_ADMIN, hashed_password))
@@ -192,7 +201,7 @@ def seed(db: Session) -> list[tuple[str, str, str]]:
     staff_by_hospital: list[User] = []
     hospitals: list[Hospital] = []
     for data in HOSPITALS:
-        hospital = build_hospital(data)
+        hospital = build_hospital(data, today)
         db.add(hospital)
         hospitals.append(hospital)
 
@@ -208,9 +217,15 @@ def seed(db: Session) -> list[tuple[str, str, str]]:
         logins.append((UserRole.HOSPITAL_ADMIN.value, hospital.name, admin_phone))
         logins.append((UserRole.STAFF.value, hospital.name, staff_phone))
 
-    # First doctor of the first hospital's first department, today's schedule.
-    todays_schedule = hospitals[0].departments[0].doctors[0].schedules[0]
-    seed_queue(db, todays_schedule, staff_by_hospital[0])
+    # The queue goes on today's evening session of the first doctor in the first
+    # hospital's first department.
+    doctor = hospitals[0].departments[0].doctors[0]
+    todays_evening = next(
+        schedule
+        for schedule in doctor.schedules
+        if schedule.date == today and schedule.start_time == EVENING_SESSION[0]
+    )
+    seed_queue(db, todays_evening, staff_by_hospital[0])
 
     return logins
 

@@ -17,7 +17,7 @@ class ErrorResponse(BaseModel):
             "examples": [
                 {
                     "error": "SCHEDULE_FULL",
-                    "message": "No serials left for this doctor today.",
+                    "message": "No serials left for this doctor on this schedule.",
                     "details": None,
                 }
             ]
@@ -29,11 +29,48 @@ class ErrorResponse(BaseModel):
     details: Any | None = None
 
 
-def error_response(description: str, *errors: tuple[str, str]) -> dict[str, Any]:
-    """Build a `responses` entry that shows each (code, message) in Swagger."""
+class ApiLinks(BaseModel):
+    docs: str
+    scalar: str
+    health: str
+
+
+class ApiInfo(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "Doctor Dekhi API",
+                    "version": "0.1.0",
+                    "links": {"docs": "/docs", "scalar": "/scalar", "health": "/health"},
+                }
+            ]
+        }
+    )
+
+    name: str
+    version: str
+    links: ApiLinks
+
+
+class HealthOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"status": "ok"}]})
+
+    status: str
+
+
+def error_response(description: str, *errors: tuple[Any, ...]) -> dict[str, Any]:
+    """Build a `responses` entry that shows each (code, message[, details]) in Swagger."""
     examples = {
-        code: {"summary": code, "value": {"error": code, "message": message, "details": None}}
-        for code, message in errors
+        code: {
+            "summary": code,
+            "value": {
+                "error": code,
+                "message": message,
+                "details": details[0] if details else None,
+            },
+        }
+        for code, message, *details in errors
     }
     return {
         "model": ErrorResponse,
@@ -63,6 +100,13 @@ VALIDATION_RESPONSE: dict[str, Any] = {
         }
     },
 }
+
+UNAUTHORIZED_RESPONSE = error_response(
+    "The token is missing, invalid or expired",
+    ("NOT_AUTHENTICATED", "Log in to use this endpoint."),
+    ("INVALID_TOKEN", "The access token is invalid."),
+    ("TOKEN_EXPIRED", "The access token has expired. Please log in again."),
+)
 
 INTERNAL_ERROR_RESPONSE = error_response(
     "Unexpected server error",

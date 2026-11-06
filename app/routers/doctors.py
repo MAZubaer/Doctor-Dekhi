@@ -6,20 +6,11 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.database import DbSession
-from app.schemas.common import (
-    INTERNAL_ERROR_RESPONSE,
-    MAX_DB_ID,
-    VALIDATION_RESPONSE,
-    error_response,
-)
+from app.schemas.common import MAX_DB_ID, VALIDATION_RESPONSE, error_response
 from app.schemas.doctor import AvailableDoctorOut
 from app.services import doctor_service
 
-router = APIRouter(
-    prefix="/doctors",
-    tags=["Patient"],
-    responses={500: INTERNAL_ERROR_RESPONSE},
-)
+router = APIRouter(prefix="/doctors", tags=["Patient"])
 
 
 @router.get(

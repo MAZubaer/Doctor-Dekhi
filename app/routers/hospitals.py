@@ -7,20 +7,11 @@ from fastapi import APIRouter, Path
 
 from app.database import DbSession
 from app.models import Department, Hospital
-from app.schemas.common import (
-    INTERNAL_ERROR_RESPONSE,
-    MAX_DB_ID,
-    VALIDATION_RESPONSE,
-    error_response,
-)
+from app.schemas.common import MAX_DB_ID, VALIDATION_RESPONSE, error_response
 from app.schemas.hospital import DepartmentOut, HospitalOut
 from app.services import hospital_service
 
-router = APIRouter(
-    prefix="/hospitals",
-    tags=["Patient"],
-    responses={500: INTERNAL_ERROR_RESPONSE},
-)
+router = APIRouter(prefix="/hospitals", tags=["Patient"])
 
 
 @router.get(

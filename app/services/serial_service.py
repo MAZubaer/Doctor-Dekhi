@@ -1,4 +1,4 @@
-"""Serial booking."""
+"""Serial booking, shared by patient bookings and staff walk-ins."""
 
 import logging
 
@@ -26,7 +26,12 @@ MAX_BOOKING_ATTEMPTS = 2
 ACTIVE_STATUSES = (SerialStatus.WAITING, SerialStatus.SERVING)
 
 
-def book_serial(db: Session, data: SerialCreate) -> Serial:
+def book_serial(
+    db: Session,
+    data: SerialCreate,
+    source: SerialSource = SerialSource.APP,
+    created_by: int | None = None,
+) -> Serial:
     """Book the next serial on a schedule and record a mock confirmation SMS.
 
     Everything happens in one transaction. An IntegrityError means a concurrent
@@ -35,7 +40,7 @@ def book_serial(db: Session, data: SerialCreate) -> Serial:
     """
     for _ in range(MAX_BOOKING_ATTEMPTS):
         try:
-            serial, notification = _create_serial(db, data)
+            serial, notification = _create_serial(db, data, source, created_by)
             db.commit()
         except IntegrityError:
             db.rollback()
@@ -44,7 +49,7 @@ def book_serial(db: Session, data: SerialCreate) -> Serial:
             raise
         else:
             # Logged after the commit so a rolled-back booking sends no SMS.
-            logger.info("Mock SMS to %s: %s", mask_phone(notification.phone), notification.message)
+            log_mock_sms(notification)
             return serial
 
     raise ConflictError(
@@ -53,16 +58,40 @@ def book_serial(db: Session, data: SerialCreate) -> Serial:
     )
 
 
-def _create_serial(db: Session, data: SerialCreate) -> tuple[Serial, Notification]:
+def lock_schedule(db: Session, schedule_id: int) -> None:
+    """Hold a row lock until commit so changes to one queue run one at a time.
+
+    The row must be fetched, not only selected: populate_existing refreshes a loaded
+    schedule when its row is read, and callers rely on seeing the latest values.
+    """
+    db.scalar(
+        select(DoctorSchedule)
+        .where(DoctorSchedule.id == schedule_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def log_mock_sms(notification: Notification) -> None:
+    logger.info("Mock SMS to %s: %s", mask_phone(notification.phone), notification.message)
+
+
+def _create_serial(
+    db: Session,
+    data: SerialCreate,
+    source: SerialSource,
+    created_by: int | None,
+) -> tuple[Serial, Notification]:
     schedule = _get_schedule(db, data.schedule_id)
     _ensure_doctor_available(schedule)
     _ensure_schedule_open(schedule)
     patient = _find_or_create_patient(db, data)
     _ensure_not_booked(db, schedule.id, patient.id)
 
-    _lock_schedule(db, schedule.id)
-    # Checked again now that the lock is held: two simultaneous requests from one
-    # patient can both pass the check above, and only one of them may continue.
+    lock_schedule(db, schedule.id)
+    # Checked again now that the lock is held: the schedule may have been cancelled,
+    # and two simultaneous requests from one patient can both pass the check above.
+    _ensure_doctor_available(schedule)
     _ensure_not_booked(db, schedule.id, patient.id)
     serial_no = _next_serial_no(db, schedule)
 
@@ -71,7 +100,8 @@ def _create_serial(db: Session, data: SerialCreate) -> tuple[Serial, Notificatio
         patient=patient,
         serial_no=serial_no,
         status=SerialStatus.WAITING,
-        source=SerialSource.APP,
+        source=source,
+        created_by=created_by,
     )
     notification = Notification(
         serial=serial,
@@ -140,16 +170,6 @@ def _ensure_not_booked(db: Session, schedule_id: int, patient_id: int) -> None:
             f"This patient already has serial #{existing.serial_no} on this schedule.",
             {"serial_id": existing.id, "serial_no": existing.serial_no},
         )
-
-
-def _lock_schedule(db: Session, schedule_id: int) -> None:
-    """Hold a row lock until commit so bookings on one schedule run one at a time."""
-    db.execute(
-        select(DoctorSchedule)
-        .where(DoctorSchedule.id == schedule_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
 
 
 def _next_serial_no(db: Session, schedule: DoctorSchedule) -> int:

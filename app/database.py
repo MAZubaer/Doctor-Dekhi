@@ -1,6 +1,7 @@
 """Database engine, session factory and the FastAPI session dependency."""
 
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from typing import Annotated
 
 from fastapi import Depends
@@ -37,3 +38,14 @@ def get_db() -> Generator[Session, None, None]:
 
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+@contextmanager
+def transaction(db: Session) -> Iterator[None]:
+    """Commit once if the block succeeds, otherwise roll back and re-raise."""
+    try:
+        yield
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise

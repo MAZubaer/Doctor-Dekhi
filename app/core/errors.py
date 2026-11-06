@@ -27,12 +27,14 @@ class AppError(Exception):
         error_code: str,
         message: str,
         details: Any | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.error_code = error_code
         self.message = message
         self.details = details
+        self.headers = headers
 
 
 class NotFoundError(AppError):
@@ -52,7 +54,13 @@ class ConflictError(AppError):
 
 class UnauthorizedError(AppError):
     def __init__(self, error_code: str, message: str, details: Any | None = None) -> None:
-        super().__init__(status.HTTP_401_UNAUTHORIZED, error_code, message, details)
+        super().__init__(
+            status.HTTP_401_UNAUTHORIZED,
+            error_code,
+            message,
+            details,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 class ForbiddenError(AppError):
@@ -86,7 +94,7 @@ def field_errors(exc: RequestValidationError) -> list[dict[str, str]]:
 
 
 async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
-    return error_json(exc.status_code, exc.error_code, exc.message, exc.details)
+    return error_json(exc.status_code, exc.error_code, exc.message, exc.details, exc.headers)
 
 
 async def handle_validation_error(

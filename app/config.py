@@ -2,9 +2,12 @@
 
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
+
+JWT_SECRET_PLACEHOLDER = "replace-with-a-long-random-string"
+MIN_JWT_SECRET_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -21,6 +24,17 @@ class Settings(BaseSettings):
     database_url: str
     dev_database_url: str | None = None
     jwt_secret: str
+    jwt_expire_minutes: int = Field(default=60, gt=0)
+    turn_near_position: int = Field(default=3, gt=0)
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def reject_weak_jwt_secret(cls, value: str) -> str:
+        if value == JWT_SECRET_PLACEHOLDER:
+            raise ValueError("JWT_SECRET is still the placeholder from .env.example")
+        if len(value) < MIN_JWT_SECRET_LENGTH:
+            raise ValueError(f"JWT_SECRET must be at least {MIN_JWT_SECRET_LENGTH} characters")
+        return value
 
     @model_validator(mode="after")
     def require_separate_dev_database(self) -> Self:

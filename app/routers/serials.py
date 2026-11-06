@@ -5,20 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, Path, status
 
 from app.database import DbSession
-from app.schemas.common import (
-    INTERNAL_ERROR_RESPONSE,
-    MAX_DB_ID,
-    VALIDATION_RESPONSE,
-    error_response,
-)
+from app.schemas.common import MAX_DB_ID, VALIDATION_RESPONSE, error_response
 from app.schemas.serial import QueueStatusOut, SerialCreate, SerialOut
 from app.services import queue_service, serial_service
 
-router = APIRouter(
-    prefix="/serials",
-    tags=["Patient"],
-    responses={500: INTERNAL_ERROR_RESPONSE},
-)
+router = APIRouter(prefix="/serials", tags=["Patient"])
 
 
 @router.post(
@@ -43,7 +34,11 @@ router = APIRouter(
         ),
         409: error_response(
             "The booking conflicts with existing serials",
-            ("ALREADY_BOOKED", "This patient already has serial #5 on this schedule."),
+            (
+                "ALREADY_BOOKED",
+                "This patient already has serial #5 on this schedule.",
+                {"serial_id": 5, "serial_no": 5},
+            ),
             ("SCHEDULE_FULL", "No serials left for this doctor on this schedule."),
             (
                 "BOOKING_CONFLICT",
@@ -62,7 +57,9 @@ def book_serial(data: SerialCreate, db: DbSession) -> SerialOut:
     summary="Check queue status",
     description=(
         "Shows who is being served, how many waiting patients are ahead and the "
-        "estimated wait. Missed patients are not counted as ahead."
+        "estimated wait. Missed patients are not counted as ahead.\n\n"
+        "If the schedule is made unavailable, a waiting patient sees `is_on_hold: true`, "
+        "and `estimated_wait_minutes` is null until the schedule reopens."
     ),
     responses={
         404: error_response(
