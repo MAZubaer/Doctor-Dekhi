@@ -3,7 +3,7 @@
 import datetime as dt
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Path, Query, status
+from fastapi import APIRouter, Body, Depends, Path, Query, status
 
 from app.core.deps import AdminUser, StaffUser, get_schedule_for_staff, get_serial_for_staff
 from app.database import DbSession
@@ -24,12 +24,14 @@ from app.schemas.staff import (
     ScheduleSummaryOut,
 )
 from app.services import queue_service
+from app.services.demo_service import keep_demo_data_current
 
 HOSPITAL_ACCESS_DENIED = ("HOSPITAL_ACCESS_DENIED", "You can only access your own hospital.")
 
 router = APIRouter(
     prefix="/staff",
     tags=["Staff"],
+    dependencies=[Depends(keep_demo_data_current)],
     responses={
         401: UNAUTHORIZED_RESPONSE,
         403: error_response("The user may not access this hospital", HOSPITAL_ACCESS_DENIED),

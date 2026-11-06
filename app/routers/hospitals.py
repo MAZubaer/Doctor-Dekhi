@@ -3,15 +3,20 @@
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Depends, Path
 
 from app.database import DbSession
 from app.models import Department, Hospital
 from app.schemas.common import MAX_DB_ID, VALIDATION_RESPONSE, error_response
 from app.schemas.hospital import DepartmentOut, HospitalOut
 from app.services import hospital_service
+from app.services.demo_service import keep_demo_data_current
 
-router = APIRouter(prefix="/hospitals", tags=["Patient"])
+router = APIRouter(
+    prefix="/hospitals",
+    tags=["Patient"],
+    dependencies=[Depends(keep_demo_data_current)],
+)
 
 
 @router.get(

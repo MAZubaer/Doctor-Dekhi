@@ -8,6 +8,8 @@ from sqlalchemy.engine import make_url
 # Must run before anything imports the app. A shell with APP_ENV=prod stays prod here
 # and is refused below, so only an unset APP_ENV is defaulted to dev.
 os.environ.setdefault("APP_ENV", "dev")
+# Demo mode writes to the database by itself, so a test has to turn it on explicitly.
+os.environ["DEMO_MODE"] = "false"
 
 try:
     from app.config import settings
@@ -50,9 +52,7 @@ def fresh_schema() -> Iterator[None]:
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield
-    seed.reset_tables()
-    with SessionLocal.begin() as db:
-        seed.seed(db)
+    seed.reset_and_seed()
 
 
 @pytest.fixture(autouse=True)

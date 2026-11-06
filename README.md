@@ -66,7 +66,7 @@ app/
   core/          Errors, auth checks, passwords, tokens, phone and BD time helpers
   routers/       hospitals, doctors, serials, auth, staff
   schemas/       Request and response models
-  services/      auth, doctor, hospital, queue and serial logic
+  services/      auth, demo, doctor, hospital, queue and serial logic
 tests/           pytest suite
 seed.py          Resets a database and inserts demo data
 pytest.ini       Test settings
@@ -261,7 +261,11 @@ $env:APP_ENV = "dev"
 uvicorn app.main:app --reload
 ```
 
-Open <http://127.0.0.1:8000/docs>. The page starts with a two-minute walkthrough.
+Open <http://127.0.0.1:8000/docs>. The page starts with a two-minute walkthrough. In
+short: take the `schedule_id` from `GET /doctors/available`, using a hospital's
+Emergency department for the session that is always open, then book, check your
+status, authorize as staff, call next and check again. IDs change between
+environments, so always copy them from the responses.
 
 `uvicorn` uses the main database unless `APP_ENV` is `dev`. To make dev the default on
 your machine, add `APP_ENV=dev` to `.env`.
@@ -278,6 +282,7 @@ See [.env.example](.env.example).
 | `JWT_SECRET` | Yes | At least 32 characters. The placeholder stops startup |
 | `JWT_EXPIRE_MINUTES` | No | Login lifetime. Defaults to 60 |
 | `TURN_NEAR_POSITION` | No | Places from being served that trigger the SMS. Defaults to 3 |
+| `DEMO_MODE` | No | `true` keeps demo data current. Defaults to `false` |
 
 `APP_ENV=dev` never falls back to main: startup fails if `DEV_DATABASE_URL` is missing
 or the same as `DATABASE_URL`. The app and `seed.py` print the target, such as
@@ -296,11 +301,30 @@ python seed.py --prod --yes    # Main database
 With no flag it exits without connecting. `APP_ENV` is ignored here, so a leftover
 setting cannot choose what gets wiped.
 
-The seed creates 2 hospitals, 12 doctors and 5 logins. Each doctor gets a 09:00 to
-13:00 and a 16:00 to 23:30 session, today and tomorrow in Bangladesh time. An
-in-progress queue sits on Dr. Mahmudul Hasan's session this evening.
+The seed creates 2 hospitals, 14 doctors and 5 logins. It also adds an Emergency
+department with a duty doctor to each hospital.
 
-Dates are fixed when you run it, so seed again on the day of a demo.
+For the next 7 days in Bangladesh time, each doctor gets a 09:00 to 13:00 and a 16:00
+to 23:30 session, and each duty doctor gets a session open all day. In-progress queues
+sit on Dr. Mahmudul Hasan's evening session and on both duty sessions for today.
+
+Dates are fixed when you run it. Seed again before a local demo, or use
+[demo mode](#demo-mode), which keeps them current.
+
+## Demo mode
+
+`DEMO_MODE=true` keeps a deployed demo usable on any day without re-seeding. It is off
+by default, and the tests only enable it explicitly.
+
+- Every active doctor keeps morning and evening sessions for the next 7 days.
+- Each hospital keeps an Emergency duty session open all day, so something is always
+  bookable, even overnight.
+- If today's duty session has no serials, it gets a small queue already in progress.
+
+This runs at startup, and again once per Bangladesh date on the first patient or staff
+request, so a server that stays up past midnight rolls over. It only adds data. It
+never deletes anything or changes an existing schedule, and running it again adds
+nothing.
 
 ## Running tests
 
@@ -311,14 +335,42 @@ pytest -q
 No other setup is needed: an unset `APP_ENV` defaults to `dev`. The suite takes about
 2.5 minutes against Neon.
 
-> **Warning:** the tests wipe the dev branch, so do not run them during a demo. Dev is
-> re-seeded when the run finishes.
+> **Warning:** `pytest -q` drops every table on the dev branch, then re-seeds dev when
+> the run finishes. Do not run it during a demo on dev.
 
 Pytest refuses to start if `APP_ENV` is `prod`, if `DEV_DATABASE_URL` is missing, or
 if it points at the same database as `DATABASE_URL`.
 
 Each run builds a fresh schema and each test starts from empty tables with only the
 rows it needs, so the tests do not depend on `seed.py`.
+
+## Deployment
+
+The app is set up for a free web service on [Render](https://render.com), defined in
+[render.yaml](render.yaml), with Python pinned in [.python-version](.python-version).
+
+1. Push the repository to GitHub.
+2. In Render, select **New > Blueprint** and connect the repository.
+3. When prompted, enter `DATABASE_URL` and `JWT_SECRET`. `render.yaml` sets the others.
+4. Seed the main database once from your machine with `python seed.py --prod --yes`.
+5. Open `/health`, then `/docs`.
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | Neon main branch, starting with `postgresql+psycopg://` |
+| `JWT_SECRET` | At least 32 random characters |
+| `APP_ENV` | `prod` |
+| `DEMO_MODE` | `true` |
+
+`DEV_DATABASE_URL` is not needed in production.
+
+**Region:** keep the app close to the database, because each booking makes several
+database round trips. `render.yaml` uses `singapore`, which matches Neon's
+`ap-southeast-1`. If your Neon project is elsewhere, change it to the nearest region.
+
+**Free tier sleep:** Render stops a free service after 15 minutes with no traffic, so
+the next request can take up to about a minute. **Evaluators should open `/health`
+first** and wait for `{"status":"ok"}` before using `/docs`.
 
 ## Key design decisions
 

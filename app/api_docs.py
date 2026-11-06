@@ -8,21 +8,25 @@ hospital staff run the same queue from the counter.
 
 ## Try it in 2 minutes
 
-The demo queue is on **Dr. Mahmudul Hasan's evening session today**, with serial #4
-being seen. Use **Try it out** on each route below.
+Each hospital has an **Emergency duty session open around the clock**, with a queue
+already in progress, so this works at any hour. Use **Try it out** on each route
+below, and copy IDs from the responses, because they change between deployments.
 
-1. **Find a hospital.** Run `GET /hospitals`, then `GET /hospitals/1/departments`.
-   Dhaka Medical College Hospital is `1` and its Medicine department is `1`.
-2. **Find a doctor.** Run `GET /doctors/available` with `department_id` set to `1`.
-   Copy the `schedule_id` of Dr. Mahmudul Hasan's 16:00 session, normally `2`.
-3. **Book a serial.** Run `POST /serials` with that `schedule_id` and any Bangladeshi
-   mobile number. Note the `id` in the response.
+1. **Find a hospital.** Run `GET /hospitals` and copy the `id` of Dhaka Medical
+   College Hospital. Then run `GET /hospitals/{hospital_id}/departments` and copy the
+   `id` of **Emergency**.
+2. **Find a doctor.** Run `GET /doctors/available` with that `department_id` and copy
+   the `schedule_id`.
+3. **Book a serial.** Run `POST /serials`, replacing the example `schedule_id` with
+   yours. Use a made-up mobile number, because a number can only hold one active
+   serial per session. Copy the `id` from the response.
 4. **Check your place.** Run `GET /serials/{serial_id}/status` with that `id`.
 5. **Authorize as staff.** Select **Authorize** at the top of this page and log in as
    `01700000012` with password `Demo@1234`. Other fields can stay empty.
 6. **Call the next patient.** Run `POST /staff/schedules/{schedule_id}/next` with the
    same `schedule_id`.
-7. **Check your place again.** Repeat step 4. There is now one person fewer ahead.
+7. **Check your place again.** Repeat step 4. The queue has moved and you are closer
+   to your turn.
 
 ## Demo logins
 

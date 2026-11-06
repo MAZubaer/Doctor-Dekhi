@@ -22,6 +22,7 @@ from app.schemas.common import (
     HealthOut,
     error_response,
 )
+from app.services.demo_service import keep_demo_data_current
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Database target: %s", settings.database_target)
+    keep_demo_data_current()
     yield
 
 

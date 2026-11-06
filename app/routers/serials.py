@@ -2,14 +2,19 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, status
+from fastapi import APIRouter, Depends, Path, status
 
 from app.database import DbSession
 from app.schemas.common import MAX_DB_ID, VALIDATION_RESPONSE, error_response
 from app.schemas.serial import QueueStatusOut, SerialCreate, SerialOut
 from app.services import queue_service, serial_service
+from app.services.demo_service import keep_demo_data_current
 
-router = APIRouter(prefix="/serials", tags=["Patient"])
+router = APIRouter(
+    prefix="/serials",
+    tags=["Patient"],
+    dependencies=[Depends(keep_demo_data_current)],
+)
 
 
 @router.post(

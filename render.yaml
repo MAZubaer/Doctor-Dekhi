@@ -1,0 +1,21 @@
+# Render Blueprint for the free demo deployment. See "Deployment" in the README.
+services:
+  - type: web
+    name: doctor-dekhi
+    runtime: python
+    plan: free
+    # Closest Render region to Neon's ap-southeast-1.
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # Entered in the Render dashboard when the Blueprint is created.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: APP_ENV
+        value: prod
+      - key: DEMO_MODE
+        value: "true"

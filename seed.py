@@ -48,13 +48,15 @@ from app.models import (  # noqa: E402
     User,
     UserRole,
 )
+from app.services.demo_service import (  # noqa: E402
+    EVENING_SESSION,
+    MORNING_SESSION,
+    SCHEDULE_MAX_SERIALS,
+    ensure_demo_data,
+)
 
 # Demo-only login shared by all seeded staff. Printed at the end of the run.
 DEMO_PASSWORD = "Demo@1234"
-
-MORNING_SESSION = (dt.time(9, 0), dt.time(13, 0))
-EVENING_SESSION = (dt.time(16, 0), dt.time(23, 30))
-SCHEDULE_MAX_SERIALS = 30
 
 SUPER_ADMIN = ("Tanvir Ahmed", "01700000001")
 
@@ -230,6 +232,16 @@ def seed(db: Session) -> list[tuple[str, str, str]]:
     return logins
 
 
+def reset_and_seed() -> list[tuple[str, str, str]]:
+    """Rebuild the tables, insert the demo data and fill the next 7 days."""
+    reset_tables()
+    with SessionLocal.begin() as db:
+        logins = seed(db)
+    with SessionLocal() as db:
+        ensure_demo_data(db)
+    return logins
+
+
 def print_logins(logins: list[tuple[str, str, str]]) -> None:
     print(f"\nDemo logins (password for all: {DEMO_PASSWORD})")
     print(f"{'Role':<16} {'Phone':<13} Hospital")
@@ -241,11 +253,7 @@ def print_logins(logins: list[tuple[str, str, str]]) -> None:
 def main() -> None:
     print(f"Target database: {settings.database_target}")
     print("Dropping and recreating all tables...")
-    reset_tables()
-
-    with SessionLocal.begin() as db:
-        logins = seed(db)
-
+    logins = reset_and_seed()
     print("Seed data inserted.")
     print_logins(logins)
 

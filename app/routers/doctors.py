@@ -3,14 +3,19 @@
 import datetime as dt
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.database import DbSession
 from app.schemas.common import MAX_DB_ID, VALIDATION_RESPONSE, error_response
 from app.schemas.doctor import AvailableDoctorOut
 from app.services import doctor_service
+from app.services.demo_service import keep_demo_data_current
 
-router = APIRouter(prefix="/doctors", tags=["Patient"])
+router = APIRouter(
+    prefix="/doctors",
+    tags=["Patient"],
+    dependencies=[Depends(keep_demo_data_current)],
+)
 
 
 @router.get(

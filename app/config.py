@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_expire_minutes: int = Field(default=60, gt=0)
     turn_near_position: int = Field(default=3, gt=0)
+    demo_mode: bool = False
 
     @field_validator("jwt_secret")
     @classmethod
