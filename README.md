@@ -192,7 +192,7 @@ A patient who missed their turn can book again.
 | POST | `/staff/serials/{serial_id}/missed` | Staff | Mark a patient as missed |
 | POST | `/staff/schedules/{schedule_id}/walk-in` | Staff | Add a walk-in patient |
 | PATCH | `/staff/schedules/{schedule_id}/availability` | Admins | Open or cancel a schedule |
-| GET | `/` | Public | API name, version and links |
+| GET, HEAD | `/` | Public | API name, version and links. Safe as an uptime ping |
 | GET | `/health` | Public | Check the API and database |
 
 **Staff** means staff, hospital admins and super admins. **Admins** means hospital

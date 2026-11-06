@@ -54,11 +54,16 @@ app.include_router(auth.router)
 app.include_router(staff.router)
 
 
+# HEAD is for uptime monitors. It stays out of the docs so "/" is listed only once.
+@app.head("/", include_in_schema=False)
 @app.get(
     "/",
     tags=["System"],
     summary="API information",
-    description="Returns the API's name, version and useful links.",
+    description=(
+        "Returns the API's name, version and useful links. Also accepts HEAD, and never "
+        "uses the database, so it is safe as an uptime ping."
+    ),
 )
 def get_api_info() -> ApiInfo:
     return ApiInfo(
